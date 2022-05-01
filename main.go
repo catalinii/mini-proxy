@@ -479,7 +479,9 @@ func DialProxy(p *ProxyInfo, host string, from string) (net.Conn, error) {
 			proto = "tcp6"
 		}
 		c, err := dialer.Dial(proto, host)
+		if err != nil {
 		log.Printf("Direct from %+v: %v [ %v ]", names, host, c.RemoteAddr())
+	}
 
 		return c, err
 	}
@@ -688,6 +690,7 @@ func handleHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	log.Printf("http %+v", req)
 	defer resp.Body.Close()
 	copyHeader(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
