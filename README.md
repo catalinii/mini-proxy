@@ -21,27 +21,27 @@ Aside from the standard features of a simple http proxy allowing CONNECT and GET
 ```
 host: <public_hostname>
 port: :8888
-sslport: :8889
-allowedhosts:
+sslPort: :8889
+allowedHosts:
     - 10.0.0.0/8
     - 192.168.0.0/16
     - 172.16.0.0/12
-localdomains:
+localDomains:
     - .*\.us$
 peers:
   - https://remote_peer:8889
 password: your_password
-outgoing_ip: local_ip
+outgoingIp: local_ip
 ipv6only: false
 ```
 - host - mandatory - publically visible DNS name pointing to the local ip
 - port - mandatory - http port for listening for proxy requests from clients
-- sslport - mandatory - port for connections from other peers (uses self generated TLS certificates)
-- allowedhosts - mandatory - hosts that can connect without authentication at the http port (port configuration)
-- localdomains - mandatory - domains that are advertised to the peers. All peers will use this proxy to connect to those domains (defined as regexp)
+- sslPort - mandatory - port for connections from other peers (uses self generated TLS certificates)
+- allowedHosts - mandatory - hosts that can connect without authentication at the http port (port configuration)
+- localDomains - mandatory - domains that are advertised to the peers. All peers will use this proxy to connect to those domains (defined as regexp)
 - peers - optional - list of remote peers. This host will initiate the connection to those peers to learn their local domains and list of peers
 - password - optional - uses password to authenticate to the remote proxies. The password needs to be the same for all the participants in the mesh
-- outgoing_ip - optional - local ip used for the direct connections, that uses no other peer
+- outgoingIp - optional - local ip used for the direct connections, that uses no other peer
 - ipv6only - optional - uses ipv6 only to connect to the remote hosts.
 
 # Example use case:

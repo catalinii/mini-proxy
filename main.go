@@ -41,16 +41,16 @@ var ro_regex = []string{
 }
 
 type Configuration struct {
-	Proxy        []Proxies `json:"proxy"`
-	Host         string    `json:"host"`
-	Port         string    `json:"port"`
-	SSLPort      string    `json:"sslPort"`
-	AllowedHosts []string  `json:"allowedHosts"`
-	LocalDomains []string  `json:"localDomains"`
-	Peers        []string  `json:"peers"`
-	Password     string    `json:"password"`
-	OutgoingIp   string    `json:"outgoing_ip"`
-	IPv6Only     bool      `json:"ipv6only"`
+	Proxy        []Proxies `yaml:"proxy"`
+	Host         string    `yaml:"host"`
+	Port         string    `yaml:"port"`
+	SSLPort      string    `yaml:"sslPort"`
+	AllowedHosts []string  `yaml:"allowedHosts"`
+	LocalDomains []string  `yaml:"localDomains"`
+	Peers        []string  `yaml:"peers"`
+	Password     string    `yaml:"password"`
+	OutgoingIp   string    `yaml:"outgoingIp"`
+	IPv6Only     bool      `yaml:"ipv6only"`
 	ch           chan int
 }
 
@@ -478,12 +478,14 @@ func DialProxy(p *ProxyInfo, host string, from string) (net.Conn, error) {
 		if c.IPv6Only == true {
 			proto = "tcp6"
 		}
-		c, err := dialer.Dial(proto, host)
-		if err != nil {
-		log.Printf("Direct from %+v: %v [ %v ]", names, host, c.RemoteAddr())
-	}
+		co, err := dialer.Dial(proto, host)
+		if err == nil {
+			log.Printf("Direct from %+v: %v [ %v ]", names, host, co.RemoteAddr())
+		} else {
+			log.Printf("Fsiler to connect to %v using proto %v: %v", host, proto, err)
+		}
 
-		return c, err
+		return co, err
 	}
 	mu.Lock()
 	proxyDialer := p.dialer
@@ -574,6 +576,26 @@ func getConnection(hostPort string, remoteAddr string) (net.Conn, error) {
 
 }
 
+func formatRequest(r *http.Request) (string, error) {
+	// Create return string
+	var request []string
+	// Add the request string
+	url := fmt.Sprintf("%v %v %v", r.Method, r.URL.RequestURI(), r.Proto)
+	request = append(request, url)
+	// Add the host
+	request = append(request, fmt.Sprintf("Host: %v", r.URL.Host))
+	// Loop through headers
+	for name, headers := range r.Header {
+		name = strings.ToLower(name)
+		for _, h := range headers {
+			request = append(request, fmt.Sprintf("%v: %v", name, h))
+		}
+	}
+
+	// Return the request as a string
+	return strings.Join(request, "\r\n") + "\r\n\r\n", nil
+}
+
 func handleTunneling(w http.ResponseWriter, r *http.Request) {
 	err := validateRequest(r)
 	if err != nil {
@@ -583,14 +605,28 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 
 	}
 	c.ProcessHeader(r.Header)
-	dest_conn, err := getConnection(r.URL.Host, r.RemoteAddr)
+	host := r.URL.Host
+	if r.Method != http.MethodConnect && !strings.Contains(host, ":") {
+		host = host + ":80"
+	}
+	dest_conn, err := getConnection(host, r.RemoteAddr)
 	if err != nil {
 		log.Printf("Error starting remote connection %s", err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
-	c.AddHeader(w.Header())
-	w.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodConnect {
+		requestDump, err := formatRequest(r)
+		if err != nil {
+			log.Println(err)
+		}
+		log.Printf("Writing to %+v:\n%v", dest_conn, string(requestDump))
+		dest_conn.Write([]byte(requestDump))
+		log.Printf("Done")
+	} else {
+		c.AddHeader(w.Header())
+		w.WriteHeader(http.StatusOK)
+	}
 	hijacker, ok := w.(http.Hijacker)
 	if !ok { // HTTP/2
 		if err := proxyBody(dest_conn, w, r); err != nil {
@@ -684,36 +720,29 @@ func transfer(destination io.WriteCloser, source io.ReadCloser) {
 	defer source.Close()
 	io.Copy(destination, source)
 }
-func handleHTTP(w http.ResponseWriter, req *http.Request) {
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
-	}
-	log.Printf("http %+v", req)
-	defer resp.Body.Close()
-	copyHeader(w.Header(), resp.Header)
-	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
-}
-func copyHeader(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
-}
 
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodConnect {
-		handleTunneling(w, r)
-	} else {
-		handleHTTP(w, r)
-	}
+	handleTunneling(w, r)
 }
 
 func main() {
 	c = NewConfig()
+	if c.OutgoingIp != "" {
+		net.DefaultResolver = &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{
+					Timeout: time.Millisecond * time.Duration(10000),
+					LocalAddr: &net.UDPAddr{
+						IP:   net.ParseIP(c.OutgoingIp),
+						Port: 0,
+					},
+				}
+				return d.DialContext(ctx, network, address)
+			},
+		}
+	}
+
 	TLS_KEY_FILE := c.Host + ".key"
 	TLS_CERT_FILE := c.Host + ".crt"
 
@@ -725,7 +754,7 @@ func main() {
 	if len(c.Peers) > 0 {
 		c.ProcessPeers(encode(c.Peers))
 	}
-	//	log.Printf("%+v", c.Proxy)
+
 	go c.LoopPeers()
 	h2s := &http2.Server{}
 
