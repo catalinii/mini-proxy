@@ -446,6 +446,7 @@ func (s *Socks) Dial(network string, targetAddr string) (_ net.Conn, err error) 
 	return conn, nil
 }
 
+var cacheMutex sync.Mutex
 var cache = map[string][]string{}
 
 func resolveHostIp(from string) []string {
@@ -457,7 +458,9 @@ func resolveHostIp(from string) []string {
 	if err != nil {
 		names = []string{ip}
 	}
+	cacheMutex.Lock()
 	cache[ip] = names
+	cacheMutex.Unlock()
 	return cache[ip]
 }
 
