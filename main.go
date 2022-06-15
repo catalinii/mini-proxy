@@ -620,9 +620,7 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Println(err)
 		}
-		log.Printf("Writing to %+v:\n%v", dest_conn, string(requestDump))
 		dest_conn.Write([]byte(requestDump))
-		log.Printf("Done")
 	} else {
 		c.AddHeader(w.Header())
 		w.WriteHeader(http.StatusOK)

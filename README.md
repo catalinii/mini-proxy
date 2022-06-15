@@ -12,7 +12,7 @@ Aside from the standard features of a simple http proxy allowing CONNECT and GET
 
 # Any requirements ?
 - it requires an publicly visible DNS name (eg. proxy.domain.com) pointing to a public ip address (ipv6 or ipv4) where the SSL port is accessible from the internet
-- for IPv4 as long as the public port (sslport) is forwarded to the private IP, the application will work just fine. Ensure both the public and private port are the same.
+- for IPv4 as long as the public port (sslPort) is forwarded to the private IP, the application will work just fine. Ensure both the public and private port are the same.
 
 # How is the configuration stored:
 - it uses the proxy.yaml file in the current directory
