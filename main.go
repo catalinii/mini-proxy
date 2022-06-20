@@ -533,14 +533,14 @@ func DialProxy(p *ProxyInfo, host string, from string) (net.Conn, error) {
 // looks up the host in the list of destinations and returns the longest sized destination
 // to allow more specific matches to be return (x.com will be returned instead .com)
 // by default uses direct connection (no proxy)
-func getConnection(hostPort string, remoteAddr string) (net.Conn, error) {
+func getConnection(hostPort string, remoteAddr string) (net.Conn, *ProxyInfo, error) {
 	outbound := &ProxyInfo{Host: "direct"}
 	arr := []*ProxyInfo{}
 	max_reg := ""
 	host, _, err := net.SplitHostPort(hostPort)
 	if err != nil {
 		log.Printf("Unable to split %v into host and port: %v", hostPort, err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	for i, p := range c.Proxy {
@@ -575,7 +575,7 @@ func getConnection(hostPort string, remoteAddr string) (net.Conn, error) {
 		log.Printf("Disabling proxy %v, err %v", outbound.Host, err)
 		outbound.Enabled = false
 	}
-	return con, err
+	return con, outbound, err
 
 }
 
@@ -612,9 +612,9 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodConnect && !strings.Contains(host, ":") {
 		host = host + ":80"
 	}
-	dest_conn, err := getConnection(host, r.RemoteAddr)
+	dest_conn, outbound, err := getConnection(host, r.RemoteAddr)
 	if err != nil {
-		log.Printf("Error starting remote connection %s", err)
+		log.Printf("Error starting remote connection to %v: %s", outbound.Host, err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
